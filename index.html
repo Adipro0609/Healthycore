@@ -390,8 +390,9 @@ const counter = setInterval(() => {
 
     if(currentCalories < finalCalories){
         currentCalories += 6;
-        calories.innerText = currentCalories;
-    }
+        calories.innerText = currentCalories
+    
+}
 
     if(currentSteps >= finalSteps && currentCalories >= finalCalories){
         clearInterval(counter);
@@ -403,3 +404,47 @@ const counter = setInterval(() => {
 
 </body>
 </html>
+<script>
+
+let currentSteps = 0;
+let currentCalories = 0;
+
+const finalSteps = 7642;
+const finalCalories = 528;
+
+const steps = document.getElementById("steps");
+const calories = document.getElementById("calories");
+
+steps.innerText = "0";
+calories.innerText = "0";
+
+const counter = setInterval(() => {
+
+    if(currentSteps < finalSteps){
+        currentSteps += 82;
+
+        if(currentSteps > finalSteps){
+            currentSteps = finalSteps;
+        }
+
+        steps.innerText = currentSteps.toLocaleString();
+    }
+
+    if(currentCalories < finalCalories){
+        currentCalories += 6;
+
+        if(currentCalories > finalCalories){
+            currentCalories = finalCalories;
+        }
+
+        calories.innerText = currentCalories;
+    }
+
+    if(currentSteps === finalSteps &&
+       currentCalories === finalCalories){
+        clearInterval(counter);
+    }
+
+},20);
+
+</script>
