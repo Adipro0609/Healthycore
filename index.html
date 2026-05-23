@@ -413,24 +413,36 @@ const STEP_THRESHOLD = 20;
 const MIN_STEP_INTERVAL = 700; // Milliseconds between steps (0.7 seconds)
 let lastStepTime = 0;
 
+// Get the start of today (midnight)
+function getTodayStart() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
+// Get the timestamp for today in milliseconds
+function getTodayTimestamp() {
+    return getTodayStart().getTime();
+}
+
 // Load today's data from localStorage
 function loadTodayData() {
-    const today = new Date().toDateString();
+    const todayTimestamp = getTodayTimestamp();
     const storedData = localStorage.getItem("healthData");
     
     if (storedData) {
         const data = JSON.parse(storedData);
         
-        // Reset if it's a new day
-        if (data.date !== today) {
-            data.date = today;
+        // Reset if it's a new day (stored timestamp is from a different day)
+        if (data.timestamp !== todayTimestamp) {
+            data.timestamp = todayTimestamp;
             data.steps = 0;
         }
         
         todaySteps = data.steps;
     } else {
         localStorage.setItem("healthData", JSON.stringify({
-            date: today,
+            timestamp: todayTimestamp,
             steps: 0
         }));
     }
@@ -440,11 +452,31 @@ function loadTodayData() {
 
 // Save today's data to localStorage
 function saveTodayData() {
-    const today = new Date().toDateString();
+    const todayTimestamp = getTodayTimestamp();
     localStorage.setItem("healthData", JSON.stringify({
-        date: today,
+        timestamp: todayTimestamp,
         steps: todaySteps
     }));
+}
+
+// Check if day has changed and reset if needed
+function checkAndResetDay() {
+    const todayTimestamp = getTodayTimestamp();
+    const storedData = localStorage.getItem("healthData");
+    
+    if (storedData) {
+        const data = JSON.parse(storedData);
+        
+        if (data.timestamp !== todayTimestamp) {
+            // New day detected - reset steps
+            todaySteps = 0;
+            localStorage.setItem("healthData", JSON.stringify({
+                timestamp: todayTimestamp,
+                steps: 0
+            }));
+            updateUI();
+        }
+    }
 }
 
 // Update UI with current values
@@ -581,8 +613,16 @@ function startSimulation() {
     }, 2000);
 }
 
+// Check for day change every minute
+function setupDayChangeCheck() {
+    setInterval(() => {
+        checkAndResetDay();
+    }, 60000); // Check every minute (60000 milliseconds)
+}
+
 // Initialize the app
 loadTodayData();
+setupDayChangeCheck();
 startTracking();
 
 </script>
