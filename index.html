@@ -212,6 +212,18 @@ body{
     font-size:13px;
 }
 
+.status{
+    position:fixed;
+    top:20px;
+    left:20px;
+    background:rgba(255,255,255,0.1);
+    padding:10px 15px;
+    border-radius:8px;
+    font-size:12px;
+    color:#9ca3af;
+    z-index:1000;
+}
+
 @keyframes grow{
     from{
         height:0;
@@ -240,6 +252,8 @@ body{
 </head>
 
 <body>
+
+<div class="status" id="status">Initializing...</div>
 
 <div class="app">
 
@@ -375,8 +389,8 @@ body{
 
 // Constants
 const GOAL_STEPS = 10000;
-const STEPS_PER_CALORIE = 19; // Approximate conversion
-const STEPS_PER_KM = 1250; // Approximate conversion
+const STEPS_PER_CALORIE = 19;
+const STEPS_PER_KM = 1250;
 
 // Get DOM elements
 const stepsElement = document.getElementById("steps");
@@ -384,10 +398,20 @@ const caloriesElement = document.getElementById("calories");
 const distanceElement = document.getElementById("distance");
 const progressBar = document.getElementById("progressBar");
 const goalText = document.getElementById("goalText");
+const statusElement = document.getElementById("status");
 
 // Initialize tracking data
 let todaySteps = 0;
-let lastSyncTime = Date.now();
+let accelerometerActive = false;
+
+// Step detection algorithm
+let lastAccelY = 0;
+let lastAccelZ = 0;
+let stepBuffer = [];
+const BUFFER_SIZE = 20;
+const STEP_THRESHOLD = 20;
+const MIN_STEP_INTERVAL = 300; // Milliseconds between steps
+let lastStepTime = 0;
 
 // Load today's data from localStorage
 function loadTodayData() {
@@ -425,95 +449,150 @@ function saveTodayData() {
 
 // Update UI with current values
 function updateUI() {
-    // Update steps
     stepsElement.innerText = todaySteps.toLocaleString();
     
-    // Calculate and update calories (approximate: 1 calorie per 19 steps)
     const calories = Math.round(todaySteps / STEPS_PER_CALORIE);
     caloriesElement.innerText = calories;
     
-    // Calculate and update distance (approximate: 1 km per 1250 steps)
     const distance = (todaySteps / STEPS_PER_KM).toFixed(2);
     distanceElement.innerText = distance;
     
-    // Update progress bar
     const percentage = Math.min((todaySteps / GOAL_STEPS) * 100, 100);
     progressBar.style.width = percentage + "%";
     
-    // Update goal text
     const percentageInt = Math.round(percentage);
     goalText.innerText = percentageInt + "% of your 10,000 goal";
 }
 
-// Simulate step tracking (in a real app, this would use device accelerometer)
-function simulateStepTracking() {
-    // Random steps added every 5 seconds (simulating natural walking)
+// Advanced step detection algorithm
+function detectStep(accelY, accelZ) {
+    const now = Date.now();
+    
+    // Add current acceleration to buffer
+    stepBuffer.push({ y: accelY, z: accelZ, time: now });
+    
+    // Keep buffer at fixed size
+    if (stepBuffer.length > BUFFER_SIZE) {
+        stepBuffer.shift();
+    }
+    
+    // Need minimum buffer for analysis
+    if (stepBuffer.length < 5) {
+        return false;
+    }
+    
+    // Calculate magnitude of acceleration
+    const magnitude = Math.sqrt(accelY * accelY + accelZ * accelZ);
+    
+    // Check if magnitude exceeds threshold
+    if (magnitude < STEP_THRESHOLD) {
+        return false;
+    }
+    
+    // Check minimum interval between steps
+    if (now - lastStepTime < MIN_STEP_INTERVAL) {
+        return false;
+    }
+    
+    // Check for peak in the buffer (step causes acceleration peak)
+    let isPeak = true;
+    const currentMag = magnitude;
+    
+    for (let i = Math.max(0, stepBuffer.length - 3); i < stepBuffer.length - 1; i++) {
+        const bufferMag = Math.sqrt(
+            stepBuffer[i].y * stepBuffer[i].y + 
+            stepBuffer[i].z * stepBuffer[i].z
+        );
+        if (bufferMag > currentMag * 1.2) {
+            isPeak = false;
+            break;
+        }
+    }
+    
+    if (isPeak) {
+        lastStepTime = now;
+        return true;
+    }
+    
+    return false;
+}
+
+// Request permission and start tracking
+function startTracking() {
+    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        // iOS 13+
+        DeviceMotionEvent.requestPermission()
+            .then((permissionState) => {
+                if (permissionState === "granted") {
+                    enableAccelerometerTracking();
+                    statusElement.innerText = "📍 Tracking Active";
+                } else {
+                    statusElement.innerText = "❌ Permission Denied";
+                    startSimulation();
+                }
+            })
+            .catch(() => {
+                statusElement.innerText = "⚠️ Error requesting permission";
+                startSimulation();
+            });
+    } else if ("ondevicemotion" in window) {
+        // Android and other devices
+        enableAccelerometerTracking();
+        statusElement.innerText = "📍 Tracking Active";
+    } else {
+        statusElement.innerText = "⚠️ Device not supported";
+        startSimulation();
+    }
+}
+
+// Enable accelerometer tracking
+function enableAccelerometerTracking() {
+    accelerometerActive = true;
+    
+    window.addEventListener("devicemotion", (event) => {
+        if (!accelerometerActive) return;
+        
+        const acceleration = event.acceleration;
+        if (!acceleration || acceleration.y === null) {
+            return;
+        }
+        
+        // Use Y and Z axes for step detection
+        const accelY = Math.abs(acceleration.y);
+        const accelZ = Math.abs(acceleration.z);
+        
+        if (detectStep(accelY, accelZ)) {
+            todaySteps++;
+            saveTodayData();
+            updateUI();
+        }
+    }, false);
+}
+
+// Fallback simulation for testing
+function startSimulation() {
     setInterval(() => {
-        // Random number between 0-3 steps per interval
-        const randomSteps = Math.floor(Math.random() * 4);
+        const randomSteps = Math.random() < 0.3 ? Math.floor(Math.random() * 3) + 1 : 0;
         if (randomSteps > 0) {
             todaySteps += randomSteps;
             saveTodayData();
             updateUI();
         }
-    }, 5000);
-}
-
-// Request permission for accelerometer (for real step tracking)
-function requestAccelerometerAccess() {
-    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
-        DeviceMotionEvent.requestPermission()
-            .then((permissionState) => {
-                if (permissionState === "granted") {
-                    startAccelerometerTracking();
-                }
-            })
-            .catch(console.error);
-    } else {
-        // Non-iOS 13+ devices or browsers that don't support the permission API
-        startAccelerometerTracking();
-    }
-}
-
-// Detect steps from accelerometer
-function startAccelerometerTracking() {
-    let lastY = 0;
-    let stepCounter = 0;
-    const STEP_THRESHOLD = 15;
-    
-    window.addEventListener("devicemotion", (event) => {
-        const acceleration = event.acceleration;
-        if (!acceleration) return;
-        
-        const currentY = Math.abs(acceleration.y);
-        const difference = Math.abs(currentY - lastY);
-        
-        if (difference > STEP_THRESHOLD) {
-            stepCounter++;
-            lastY = currentY;
-            
-            // Add step every 2 steps detected
-            if (stepCounter >= 2) {
-                todaySteps++;
-                stepCounter = 0;
-                saveTodayData();
-                updateUI();
-            }
-        }
-    });
+    }, 2000);
 }
 
 // Initialize the app
 loadTodayData();
+startTracking();
 
-// Add a button to manually test step tracking
+// Test button for manual testing
 const addStepButton = document.createElement("button");
-addStepButton.innerText = "Add Test Steps";
+addStepButton.innerText = "➕ Test Steps";
 addStepButton.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
-    padding: 10px 20px;
+    padding: 12px 24px;
     background: #22c55e;
     color: white;
     border: none;
@@ -521,16 +600,15 @@ addStepButton.style.cssText = `
     cursor: pointer;
     font-weight: 600;
     z-index: 1000;
+    font-size: 14px;
+    box-shadow: 0 0 20px rgba(34,197,94,0.3);
 `;
 addStepButton.onclick = () => {
-    todaySteps += 100;
+    todaySteps += 50;
     saveTodayData();
     updateUI();
 };
 document.body.appendChild(addStepButton);
-
-// Start accelerometer tracking
-requestAccelerometerAccess();
 
 </script>
 
