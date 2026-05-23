@@ -410,7 +410,7 @@ let lastAccelZ = 0;
 let stepBuffer = [];
 const BUFFER_SIZE = 20;
 const STEP_THRESHOLD = 20;
-const MIN_STEP_INTERVAL = 300; // Milliseconds between steps
+const MIN_STEP_INTERVAL = 700; // Milliseconds between steps (0.7 seconds)
 let lastStepTime = 0;
 
 // Load today's data from localStorage
@@ -584,31 +584,6 @@ function startSimulation() {
 // Initialize the app
 loadTodayData();
 startTracking();
-
-// Test button for manual testing
-const addStepButton = document.createElement("button");
-addStepButton.innerText = "➕ Test Steps";
-addStepButton.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    padding: 12px 24px;
-    background: #22c55e;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    z-index: 1000;
-    font-size: 14px;
-    box-shadow: 0 0 20px rgba(34,197,94,0.3);
-`;
-addStepButton.onclick = () => {
-    todaySteps += 50;
-    saveTodayData();
-    updateUI();
-};
-document.body.appendChild(addStepButton);
 
 </script>
 
