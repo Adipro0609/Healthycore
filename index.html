@@ -116,10 +116,11 @@ body{
 }
 
 .progress-bar{
-    width:76%;
+    width:0%;
     height:100%;
     background:white;
     border-radius:20px;
+    transition:width 0.3s ease;
 }
 
 /* STATS */
@@ -270,12 +271,12 @@ body{
             0
         </div>
 
-        <div class="goal">
-            76% of your 10,000 goal
+        <div class="goal" id="goalText">
+            0% of your 10,000 goal
         </div>
 
         <div class="progress">
-            <div class="progress-bar"></div>
+            <div class="progress-bar" id="progressBar"></div>
         </div>
 
     </div>
@@ -306,8 +307,8 @@ body{
                 Distance
             </div>
 
-            <div class="card-value">
-                8.4
+            <div class="card-value" id="distance">
+                0
             </div>
 
             <div class="card-sub">
@@ -372,32 +373,164 @@ body{
 
 <script>
 
-let currentSteps = 0;
-let currentCalories = 0;
+// Constants
+const GOAL_STEPS = 10000;
+const STEPS_PER_CALORIE = 19; // Approximate conversion
+const STEPS_PER_KM = 1250; // Approximate conversion
 
-const finalSteps = 7642;
-const finalCalories = 528;
+// Get DOM elements
+const stepsElement = document.getElementById("steps");
+const caloriesElement = document.getElementById("calories");
+const distanceElement = document.getElementById("distance");
+const progressBar = document.getElementById("progressBar");
+const goalText = document.getElementById("goalText");
 
-const steps = document.getElementById("steps");
-const calories = document.getElementById("calories");
+// Initialize tracking data
+let todaySteps = 0;
+let lastSyncTime = Date.now();
 
-const counter = setInterval(() => {
-
-    if(currentSteps < finalSteps){
-        currentSteps += 82;
-        steps.innerText = currentSteps.toLocaleString();
+// Load today's data from localStorage
+function loadTodayData() {
+    const today = new Date().toDateString();
+    const storedData = localStorage.getItem("healthData");
+    
+    if (storedData) {
+        const data = JSON.parse(storedData);
+        
+        // Reset if it's a new day
+        if (data.date !== today) {
+            data.date = today;
+            data.steps = 0;
+        }
+        
+        todaySteps = data.steps;
+    } else {
+        localStorage.setItem("healthData", JSON.stringify({
+            date: today,
+            steps: 0
+        }));
     }
+    
+    updateUI();
+}
 
-    if(currentCalories < finalCalories){
-        currentCalories += 6;
-        calories.innerText = currentCalories;
+// Save today's data to localStorage
+function saveTodayData() {
+    const today = new Date().toDateString();
+    localStorage.setItem("healthData", JSON.stringify({
+        date: today,
+        steps: todaySteps
+    }));
+}
+
+// Update UI with current values
+function updateUI() {
+    // Update steps
+    stepsElement.innerText = todaySteps.toLocaleString();
+    
+    // Calculate and update calories (approximate: 1 calorie per 19 steps)
+    const calories = Math.round(todaySteps / STEPS_PER_CALORIE);
+    caloriesElement.innerText = calories;
+    
+    // Calculate and update distance (approximate: 1 km per 1250 steps)
+    const distance = (todaySteps / STEPS_PER_KM).toFixed(2);
+    distanceElement.innerText = distance;
+    
+    // Update progress bar
+    const percentage = Math.min((todaySteps / GOAL_STEPS) * 100, 100);
+    progressBar.style.width = percentage + "%";
+    
+    // Update goal text
+    const percentageInt = Math.round(percentage);
+    goalText.innerText = percentageInt + "% of your 10,000 goal";
+}
+
+// Simulate step tracking (in a real app, this would use device accelerometer)
+function simulateStepTracking() {
+    // Random steps added every 5 seconds (simulating natural walking)
+    setInterval(() => {
+        // Random number between 0-3 steps per interval
+        const randomSteps = Math.floor(Math.random() * 4);
+        if (randomSteps > 0) {
+            todaySteps += randomSteps;
+            saveTodayData();
+            updateUI();
+        }
+    }, 5000);
+}
+
+// Request permission for accelerometer (for real step tracking)
+function requestAccelerometerAccess() {
+    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+        DeviceMotionEvent.requestPermission()
+            .then((permissionState) => {
+                if (permissionState === "granted") {
+                    startAccelerometerTracking();
+                }
+            })
+            .catch(console.error);
+    } else {
+        // Non-iOS 13+ devices or browsers that don't support the permission API
+        startAccelerometerTracking();
     }
+}
 
-    if(currentSteps >= finalSteps && currentCalories >= finalCalories){
-        clearInterval(counter);
-    }
+// Detect steps from accelerometer
+function startAccelerometerTracking() {
+    let lastY = 0;
+    let stepCounter = 0;
+    const STEP_THRESHOLD = 15;
+    
+    window.addEventListener("devicemotion", (event) => {
+        const acceleration = event.acceleration;
+        if (!acceleration) return;
+        
+        const currentY = Math.abs(acceleration.y);
+        const difference = Math.abs(currentY - lastY);
+        
+        if (difference > STEP_THRESHOLD) {
+            stepCounter++;
+            lastY = currentY;
+            
+            // Add step every 2 steps detected
+            if (stepCounter >= 2) {
+                todaySteps++;
+                stepCounter = 0;
+                saveTodayData();
+                updateUI();
+            }
+        }
+    });
+}
 
-},20);
+// Initialize the app
+loadTodayData();
+
+// Add a button to manually test step tracking
+const addStepButton = document.createElement("button");
+addStepButton.innerText = "Add Test Steps";
+addStepButton.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    z-index: 1000;
+`;
+addStepButton.onclick = () => {
+    todaySteps += 100;
+    saveTodayData();
+    updateUI();
+};
+document.body.appendChild(addStepButton);
+
+// Start accelerometer tracking
+requestAccelerometerAccess();
 
 </script>
 
